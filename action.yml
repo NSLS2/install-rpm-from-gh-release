@@ -109,18 +109,22 @@ runs:
         RHEL_VERSION="${{ steps.detect_rhel.outputs.detected_rhel }}"
         RELEASE_FILE="/tmp/release.json"
         
-        # Try multiple patterns to find the RPM matching the RHEL version
-        # Patterns: el8, rhel-8, fc8, .el8., etc.
-        RPM_URL=$(jq -r '.assets[] | select(.name | test("el'$RHEL_VERSION'|rhel-'$RHEL_VERSION'|fc'$RHEL_VERSION'|\.el'$RHEL_VERSION'\.")) | .browser_download_url' "$RELEASE_FILE" | head -1)
-        
+        # Extract the download URL for matching RPM
+        # Looks for patterns like: el8, rhel-8, fc8, etc.
+        # Excludes .src.rpm and .srpm files
+        RPM_URL=$(echo "$JSON_INPUT" | jq -r \
+          ".assets[] | select(.name | test(\"el$EL_VERSION|rhel-$EL_VERSION|fc$EL_VERSION\"; \"i\")) | select(.name | contains(\".src.rpm\") or contains(\".srpm\") | not) | .browser_download_url" \
+          | head -1)
+
         if [ -z "$RPM_URL" ]; then
-          echo "::error::No RPM found for RHEL version $RHEL_VERSION"
-          echo "::error::Available assets:"
-          jq -r '.assets[].name' "$RELEASE_FILE" | sed 's/^/  /'
+          echo "Error: No matching RPM found for version $VERSION and EL $EL_VERSION" >&2
+          echo "" >&2
+          echo "Available assets:" >&2
+          echo "$JSON_INPUT" | jq -r '.assets[].name' | sed 's/^/  /' >&2
           exit 1
         fi
-        
-        echo "Found RPM: $RPM_URL"
+
+        echo "Found rpm URL: $RPM_URL"
         echo "rpm_url=$RPM_URL" >> $GITHUB_OUTPUT
         
         # Extract RPM filename
