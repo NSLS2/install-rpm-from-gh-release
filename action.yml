@@ -87,14 +87,14 @@ runs:
           exit 1
         fi
         
-        echo "$RESPONSE" | jq . > "${{ runner.temp }}/release.json"
+        echo "$RESPONSE" | jq . > "/tmp/release.json"
       shell: bash
 
     - name: Find matching RPM
       id: find_rpm
       run: |
         RHEL_VERSION="${{ steps.detect_rhel.outputs.detected_rhel }}"
-        RELEASE_FILE="${{ runner.temp }}/release.json"
+        RELEASE_FILE="/tmp/release.json"
         
         # Try multiple patterns to find the RPM matching the RHEL version
         # Patterns: el8, rhel-8, fc8, .el8., etc.
@@ -117,16 +117,16 @@ runs:
 
     - name: Download RPM
       run: |
-        curl -L -o "${{ steps.find_rpm.outputs.rpm_filename }}" \
+        curl -L -o "/tmp/${{ steps.find_rpm.outputs.rpm_filename }}" \
           -H "Authorization: token ${{ inputs.github_token }}" \
           "${{ steps.find_rpm.outputs.rpm_url }}"
         
         echo "Downloaded: ${{ steps.find_rpm.outputs.rpm_filename }}"
-        ls -lh "${{ steps.find_rpm.outputs.rpm_filename }}"
+        ls -lh "/tmp/${{ steps.find_rpm.outputs.rpm_filename }}"
       shell: bash
 
     - name: Install RPM with dnf
       run: |
-        dnf install -y "${{ steps.find_rpm.outputs.rpm_filename }}"
+        dnf install -y "/tmp/${{ steps.find_rpm.outputs.rpm_filename }}"
         echo "RPM installed successfully"
       shell: bash
