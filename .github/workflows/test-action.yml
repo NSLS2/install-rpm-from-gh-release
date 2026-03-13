@@ -34,9 +34,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # Need to allowerasing because some almalinux containers ship with
+      # curl-minimal which conflicts with the full curl package
       - name: Make sure curl and jq are installed
         run: |
-          dnf -y install curl-minimal jq
+          dnf -y --allowerasing install curl jq
 
       - name: Setup Powertools if RHEL 8
         if: matrix.rhel_version == '8'
