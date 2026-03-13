@@ -34,9 +34,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Setup Powertools if RHEL 8
+        if: matrix.rhel_version == '8'
+        run: |
+          dnf -y install 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled powertools
+      
+      - name: Setup CRB if not RHEL 8
+        if: matrix.rhel_version != '8'
+        run: |
+          dnf -y install 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled crb
+
+      - name: Install epel repository
+        run: |
+          dnf -y install epel-release
+
       - name: Test Find & Install RPM action
         uses: ./
         with:
           rhel_version: ${{ matrix.rhel_version }}
           repository: ${{ inputs.repo || 'NSLS2/bitshuffle-rpm' }}
           release_tag: ${{ inputs.tag || '0.5.2-2' }}
+          install_devel: 'true'

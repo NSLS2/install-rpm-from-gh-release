@@ -20,6 +20,10 @@ inputs:
     description: 'GitHub token for API access (defaults to job token)'
     required: false
     default: ${{ github.token }}
+  install_devel:
+    description: 'Also install the -devel package variant if available'
+    required: false
+    default: 'false'
 
 outputs:
   rpm_filename:
@@ -113,7 +117,7 @@ runs:
         # Looks for patterns like: el8, rhel-8, fc8, etc.
         # Excludes .src.rpm and .srpm files
         RPM_URL=$(cat "$RELEASE_FILE" | jq -r \
-          ".assets[] | select(.name | test(\"el$RHEL_VERSION|rhel-$RHEL_VERSION|fc$RHEL_VERSION\"; \"i\")) | select(.name | contains(\".src.rpm\") or contains(\".srpm\") | not) | .browser_download_url" \
+          ".assets[] | select(.name | test(\"el$RHEL_VERSION|rhel-$RHEL_VERSION|fc$RHEL_VERSION\"; \"i\")) | select(.name | contains(\".src.rpm\") or contains(\".srpm\") | not) | select(.name | contains(\"-devel-\") | not) | .browser_download_url" \
           | head -1)
 
         if [ -z "$RPM_URL" ]; then
@@ -130,6 +134,22 @@ runs:
         # Extract RPM filename
         RPM_FILENAME=$(basename "$RPM_URL")
         echo "rpm_filename=$RPM_FILENAME" >> $GITHUB_OUTPUT
+        
+        # Find devel package if requested
+        if [ "${{ inputs.install_devel }}" = "true" ]; then
+          DEVEL_RPM_URL=$(cat "$RELEASE_FILE" | jq -r \
+            ".assets[] | select(.name | test(\"el$RHEL_VERSION|rhel-$RHEL_VERSION|fc$RHEL_VERSION\"; \"i\")) | select(.name | contains(\".src.rpm\") or contains(\".srpm\") | not) | select(.name | contains(\"-devel-\")) | .browser_download_url" \
+            | head -1)
+          
+          if [ -n "$DEVEL_RPM_URL" ]; then
+            echo "Found devel rpm URL: $DEVEL_RPM_URL"
+            echo "devel_rpm_url=$DEVEL_RPM_URL" >> $GITHUB_OUTPUT
+            DEVEL_RPM_FILENAME=$(basename "$DEVEL_RPM_URL")
+            echo "devel_rpm_filename=$DEVEL_RPM_FILENAME" >> $GITHUB_OUTPUT
+          else
+            echo "Warning: --install-devel requested but no devel package found"
+          fi
+        fi
       shell: bash
 
     - name: Download RPM
@@ -140,10 +160,27 @@ runs:
         
         echo "Downloaded: ${{ steps.find_rpm.outputs.rpm_filename }}"
         ls -lh "/tmp/${{ steps.find_rpm.outputs.rpm_filename }}"
+        
+        # Download devel RPM if present
+        if [ -n "${{ steps.find_rpm.outputs.devel_rpm_url }}" ]; then
+          curl -L -o "/tmp/${{ steps.find_rpm.outputs.devel_rpm_filename }}" \
+            -H "Authorization: token ${{ inputs.github_token }}" \
+            "${{ steps.find_rpm.outputs.devel_rpm_url }}"
+          
+          echo "Downloaded: ${{ steps.find_rpm.outputs.devel_rpm_filename }}"
+          ls -lh "/tmp/${{ steps.find_rpm.outputs.devel_rpm_filename }}"
+        fi
       shell: bash
 
     - name: Install RPM with dnf
       run: |
-        dnf install -y "/tmp/${{ steps.find_rpm.outputs.rpm_filename }}"
-        echo "RPM installed successfully"
+        INSTALL_ARGS="/tmp/${{ steps.find_rpm.outputs.rpm_filename }}"
+        
+        # Add devel RPM if present
+        if [ -n "${{ steps.find_rpm.outputs.devel_rpm_url }}" ]; then
+          INSTALL_ARGS="$INSTALL_ARGS /tmp/${{ steps.find_rpm.outputs.devel_rpm_filename }}"
+        fi
+        
+        dnf install -y $INSTALL_ARGS
+        echo "RPM installation completed successfully"
       shell: bash
