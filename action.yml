@@ -112,15 +112,15 @@ runs:
         # Extract the download URL for matching RPM
         # Looks for patterns like: el8, rhel-8, fc8, etc.
         # Excludes .src.rpm and .srpm files
-        RPM_URL=$(echo "$JSON_INPUT" | jq -r \
-          ".assets[] | select(.name | test(\"el$EL_VERSION|rhel-$EL_VERSION|fc$EL_VERSION\"; \"i\")) | select(.name | contains(\".src.rpm\") or contains(\".srpm\") | not) | .browser_download_url" \
+        RPM_URL=$(cat "$RELEASE_FILE" | jq -r \
+          ".assets[] | select(.name | test(\"el$RHEL_VERSION|rhel-$RHEL_VERSION|fc$RHEL_VERSION\"; \"i\")) | select(.name | contains(\".src.rpm\") or contains(\".srpm\") | not) | .browser_download_url" \
           | head -1)
 
         if [ -z "$RPM_URL" ]; then
-          echo "Error: No matching RPM found for version $VERSION and EL $EL_VERSION" >&2
+          echo "Error: No matching RPM found EL$RHEL_VERSION" >&2
           echo "" >&2
           echo "Available assets:" >&2
-          echo "$JSON_INPUT" | jq -r '.assets[].name' | sed 's/^/  /' >&2
+          cat "$RELEASE_FILE" | jq -r '.assets[].name' | sed 's/^/  /' >&2
           exit 1
         fi
 
