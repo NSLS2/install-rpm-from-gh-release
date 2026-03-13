@@ -59,6 +59,19 @@ jobs:
     echo "Detected RHEL: ${{ steps.install.outputs.detected_rhel_version }}"
 ```
 
+### Installing Development Package
+
+To also install the `-devel` package variant (useful for building against the installed package):
+
+```yaml
+- name: Install Package and Devel Variant
+  uses: NSLS2/install-rpm-from-gh-release@v1
+  with:
+    repository: 'owner/package'
+    release_tag: 'v1.0.0'
+    install_devel: 'true'
+```
+
 ## Inputs
 
 | Input | Required | Default | Description |
@@ -67,6 +80,7 @@ jobs:
 | `release_tag` | ✓ | - | Release tag to download from (e.g., `v1.0.0`) |
 | `rhel_version` | ✗ | Auto-detect | RHEL version (8, 9, or 10). If empty, auto-detects. |
 | `github_token` | ✗ | `${{ github.token }}` | GitHub token for API access |
+| `install_devel` | ✗ | `'false'` | Also install the -devel package variant if available |
 
 ## Outputs
 
@@ -74,6 +88,8 @@ jobs:
 |--------|-------------|
 | `rpm_filename` | The filename of the downloaded RPM |
 | `rpm_url` | The download URL of the RPM |
+| `devel_rpm_filename` | The filename of the downloaded -devel RPM (if `install_devel: 'true'`) |
+| `devel_rpm_url` | The download URL of the -devel RPM (if `install_devel: 'true'`) |
 | `detected_rhel_version` | The RHEL version used for matching |
 
 ## How It Works
@@ -81,8 +97,9 @@ jobs:
 1. **Version Detection** - Detects the system's RHEL version or uses the provided `rhel_version`
 2. **Release Fetch** - Queries the GitHub API to get release information
 3. **RPM Matching** - Searches release assets for an RPM matching the detected/specified RHEL version
-4. **Download** - Downloads the matched RPM
-5. **Installation** - Installs the RPM using `dnf`
+4. **Devel Package Search** (optional) - If `install_devel: 'true'`, searches for a matching `-devel` variant package
+5. **Download** - Downloads the matched RPM(s)
+6. **Installation** - Installs the RPM(s) using `dnf`
 
 ### RPM Naming Patterns Supported
 
@@ -95,9 +112,8 @@ The action recognizes RPMs with these naming patterns:
 
 ## Requirements
 
-- A GitHub Actions runner with Red Hat Enterprise Linux (RHEL) 8, 9, or 10
+- A GitHub Actions runner with a RHEL-like OS installed (RHEL, AlmaLinux, Rocky Linux, CentOS) version 8, 9, or 10
 - `curl` and `jq` installed (typically pre-installed)
-- `sudo` access for `dnf install` (usually available in GitHub Actions runners)
 
 ## Example Workflow
 
@@ -126,8 +142,8 @@ jobs:
       - name: Install Package
         uses: NSLS2/install-rpm-from-gh-release@v1
         with:
-          repository: jwlodek/repo-with-rpms-in-release
-          release_tag: 'v1.0.0'
+          repository: ${{ github.event.inputs.repo }}
+          release_tag: ${{ github.event.inputs.tag }}
 
       - name: Verify Installation
         run: |
