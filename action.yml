@@ -96,6 +96,13 @@ runs:
         echo "$RESPONSE" | jq . > "/tmp/release.json"
       shell: bash
 
+    - name: Debug release information
+      id: debug_release
+      run: |
+        echo "Release information:"
+        cat /tmp/release.json
+      shell: bash
+
     - name: Find matching RPM
       id: find_rpm
       run: |
