@@ -35,6 +35,12 @@ outputs:
 runs:
   using: composite
   steps:
+
+    - name: Install jq for JSON parsing
+      run: |
+        dnf -y install jq
+      shell: bash
+
     - name: Check for RHEL-like system
       run: |
         if [ ! -f /etc/os-release ]; then
