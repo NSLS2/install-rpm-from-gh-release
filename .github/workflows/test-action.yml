@@ -34,6 +34,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Make sure curl and jq are installed
+        run: |
+          dnf -y install curl jq
+
       - name: Setup Powertools if RHEL 8
         if: matrix.rhel_version == '8'
         run: |

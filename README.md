@@ -113,7 +113,7 @@ The action recognizes RPMs with these naming patterns:
 ## Requirements
 
 - A GitHub Actions runner with a RHEL-like OS installed (RHEL, AlmaLinux, Rocky Linux, CentOS) version 8, 9, or 10
-- `curl` and `jq` installed (typically pre-installed)
+- `curl` and `jq` installed and in the `PATH` (the action checks for these tools and will fail if they are missing)
 
 ## Example Workflow
 

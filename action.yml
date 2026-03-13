@@ -40,9 +40,16 @@ runs:
   using: composite
   steps:
 
-    - name: Install jq for JSON parsing
+    - name: Check for required tools
       run: |
-        dnf -y install jq
+        if ! command -v jq &> /dev/null; then
+          echo "::error::jq is required but not installed on this runner"
+          exit 1
+        fi
+        if ! command -v curl &> /dev/null; then
+          echo "::error::curl is required but not installed on this runner"
+          exit 1
+        fi
       shell: bash
 
     - name: Check for RHEL-like system
