@@ -1,0 +1,42 @@
+---
+
+name: Test Find & Install RPM action
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Repository to install from'
+        required: false
+        default: 'NSLS2/bitshuffle-rpm'
+      tag:
+        description: 'Release tag'
+        required: false
+        default: '0.5.2-2'
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rhel_version: [8, 9, 10]
+    container:
+      image: almalinux:${{ matrix.rhel_version }}
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Test Find & Install RPM action
+        uses: ./
+        with:
+          rhel_version: ${{ matrix.rhel_version }}
+          repository: ${{ inputs.repo || 'NSLS2/bitshuffle-rpm' }}
+          release_tag: ${{ inputs.tag || '0.5.2-2' }}

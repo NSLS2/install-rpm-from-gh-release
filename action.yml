@@ -1,0 +1,132 @@
+name: Install RPM from GitHub Release
+description: Download and install an RPM from a GitHub release, automatically detecting the correct version for your RHEL system
+
+branding:
+  icon: package
+  color: red
+
+inputs:
+  repository:
+    description: 'Target repository in owner/repo format (e.g., owner/my-package)'
+    required: true
+  release_tag:
+    description: 'Release tag to download from (e.g., v1.0.0)'
+    required: true
+  rhel_version:
+    description: 'RHEL version to target (8, 9, or 10). If not specified, attempts auto-detection.'
+    required: false
+    default: ''
+  github_token:
+    description: 'GitHub token for API access (defaults to job token)'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  rpm_filename:
+    description: 'Downloaded RPM filename'
+    value: ${{ steps.find_rpm.outputs.rpm_filename }}
+  rpm_url:
+    description: 'Download URL of the RPM'
+    value: ${{ steps.find_rpm.outputs.rpm_url }}
+  detected_rhel_version:
+    description: 'RHEL version that was used for matching'
+    value: ${{ steps.detect_rhel.outputs.detected_rhel }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check for RHEL-like system
+      run: |
+        if [ ! -f /etc/os-release ]; then
+          echo "::error::Cannot find /etc/os-release. This action requires a RHEL-like system."
+          exit 1
+        fi
+        
+        if ! grep -q "ID_LIKE.*rhel" /etc/os-release; then
+          echo "::error::This action requires a RHEL-like system (AlmaLinux, CentOS, RHEL, Rocky Linux, etc.)"
+          echo "::error::System information:"
+          cat /etc/os-release
+          exit 1
+        fi
+      shell: bash
+
+    - name: Detect RHEL version
+      id: detect_rhel
+      run: |
+        RHEL_VERSION="${{ inputs.rhel_version }}"
+        
+        # Auto-detect if not provided
+        if [ -z "$RHEL_VERSION" ]; then
+          if grep -q "release 8" /etc/redhat-release 2>/dev/null; then
+            RHEL_VERSION="8"
+          elif grep -q "release 9" /etc/redhat-release 2>/dev/null; then
+            RHEL_VERSION="9"
+          elif grep -q "release 10" /etc/redhat-release 2>/dev/null; then
+            RHEL_VERSION="10"
+          else
+            echo "::error::Could not auto-detect RHEL version. Please specify 'rhel_version' input."
+            exit 1
+          fi
+          echo "Auto-detected RHEL version: $RHEL_VERSION"
+        fi
+        
+        echo "detected_rhel=$RHEL_VERSION" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Fetch release information
+      id: fetch_release
+      run: |
+        RESPONSE=$(curl -s -L \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: token ${{ inputs.github_token }}" \
+          "https://api.github.com/repos/${{ inputs.repository }}/releases/tags/${{ inputs.release_tag }}")
+        
+        if echo "$RESPONSE" | jq -e '.message' >/dev/null 2>&1; then
+          ERROR_MSG=$(echo "$RESPONSE" | jq -r '.message')
+          echo "::error::Failed to fetch release: $ERROR_MSG"
+          exit 1
+        fi
+        
+        echo "$RESPONSE" | jq . > "${{ runner.temp }}/release.json"
+      shell: bash
+
+    - name: Find matching RPM
+      id: find_rpm
+      run: |
+        RHEL_VERSION="${{ steps.detect_rhel.outputs.detected_rhel }}"
+        RELEASE_FILE="${{ runner.temp }}/release.json"
+        
+        # Try multiple patterns to find the RPM matching the RHEL version
+        # Patterns: el8, rhel-8, fc8, .el8., etc.
+        RPM_URL=$(jq -r '.assets[] | select(.name | test("el'$RHEL_VERSION'|rhel-'$RHEL_VERSION'|fc'$RHEL_VERSION'|\.el'$RHEL_VERSION'\.")) | .browser_download_url' "$RELEASE_FILE" | head -1)
+        
+        if [ -z "$RPM_URL" ]; then
+          echo "::error::No RPM found for RHEL version $RHEL_VERSION"
+          echo "::error::Available assets:"
+          jq -r '.assets[].name' "$RELEASE_FILE" | sed 's/^/  /'
+          exit 1
+        fi
+        
+        echo "Found RPM: $RPM_URL"
+        echo "rpm_url=$RPM_URL" >> $GITHUB_OUTPUT
+        
+        # Extract RPM filename
+        RPM_FILENAME=$(basename "$RPM_URL")
+        echo "rpm_filename=$RPM_FILENAME" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Download RPM
+      run: |
+        curl -L -o "${{ steps.find_rpm.outputs.rpm_filename }}" \
+          -H "Authorization: token ${{ inputs.github_token }}" \
+          "${{ steps.find_rpm.outputs.rpm_url }}"
+        
+        echo "Downloaded: ${{ steps.find_rpm.outputs.rpm_filename }}"
+        ls -lh "${{ steps.find_rpm.outputs.rpm_filename }}"
+      shell: bash
+
+    - name: Install RPM with dnf
+      run: |
+        dnf install -y "${{ steps.find_rpm.outputs.rpm_filename }}"
+        echo "RPM installed successfully"
+      shell: bash
