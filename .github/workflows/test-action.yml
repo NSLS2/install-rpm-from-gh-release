@@ -36,7 +36,7 @@ jobs:
 
       - name: Make sure curl and jq are installed
         run: |
-          dnf -y install curl jq
+          dnf -y install curl-minimal jq
 
       - name: Setup Powertools if RHEL 8
         if: matrix.rhel_version == '8'
